@@ -1,0 +1,68 @@
+#!/bin/sh
+
+# put in /usr/sbin/fan_monitor
+# fan_monitor
+# Utility script to monitor temperatures and turn on/off/run the fan in accordance
+# with the original Belkin specs.
+
+INTERVAL=30 # Poll every 30 seconds
+
+# The fan will turn on if any of these temperatures is exceeded
+CPU_ON=75000    # Belkin default is 85
+DDR_ON=60000    # Belkin default is 65
+WIFI_ON=95000   # Belkin default is 105
+
+# The fan will run at reduced speed if any of these temperatures are below these values
+CPU_MID=69500     # Belkin sets no default
+DDR_MID=55000     # Belkin sets no default
+WIFI_MID=75000    # Belkin sets no default
+
+# The fan will turn off if all of the temperatures are below these values
+CPU_OFF=63500     # Belkin default is 80
+DDR_OFF=50000     # Belkin default is 60
+WIFI_OFF=55000    # Belkin default is 100
+
+old_pwm=-2
+
+fan_set() {
+    if [ "$1" -eq 2 ]; then
+        pwm=255
+	ppwm="100%"
+    elif [ "$1" -eq 1 ]; then
+        pwm=191
+	ppwm="75%"
+    elif [ "$1" -eq 0 ]; then
+        pwm=127
+	ppwm="50%"
+    fi
+    if [ "$pwm" -ne "$old_pwm" ]; then
+	logger -t FAN_MONITOR "Setting Fan to $ppwm"
+        echo "$pwm" > /sys/devices/platform/pwm_fan/hwmon/hwmon0/pwm1
+        old_pwm=$pwm
+    fi
+}
+
+# Turn fan to reduced speed when exiting
+trap "{ logger -t FAN_MONITOR Fan monitor exiting; fan_set 2; logger -t FAN_MONITOR as a precaution; exit; }" SIGINT SIGTERM
+
+# Main fan control loop
+while :
+do
+    cpu=`cat /sys/class/hwmon/hwmon2/temp1_input`
+    ddr=`cat /sys/class/hwmon/hwmon1/temp1_input`
+    wifi=`cat /sys/class/hwmon/hwmon1/temp2_input`
+
+    if [ "$cpu" -ge $CPU_ON -o "$ddr" -ge $DDR_ON -o "$wifi" -ge $WIFI_ON ]
+    then
+        fan_set 2
+    elif [ "$cpu" -le $CPU_OFF -a "$ddr" -le $DDR_OFF -a "$wifi" -le $WIFI_OFF ]
+    then
+        fan_set 0
+    elif [ "$cpu" -le $CPU_MID -a "$ddr" -le $DDR_MID -a "$wifi" -le $WIFI_MID ]
+    then
+        fan_set 1
+    fi
+
+    sleep $INTERVAL
+done
+
