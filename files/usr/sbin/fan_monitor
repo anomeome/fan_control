@@ -2,67 +2,72 @@
 
 # put in /usr/sbin/fan_monitor
 # fan_monitor
-# Utility script to monitor temperatures and turn on/off/run the fan in accordance
-# with the original Belkin specs.
+# Utility script to monitor temperatures and run fan at 50%/75%/100%
+# For Reference the original Belkin specs.
 
-INTERVAL=30 # Poll every 30 seconds
+INTERVAL=20  # sleep time in seconds between temp check
+FANLOW=127   # low fan speed, set to 0 for off
+FANMID=191   # mid fan speed
+FANHI=255    # high fan speed
 
-# The fan will turn on if any of these temperatures is exceeded
-CPU_ON=75000    # Belkin default is 85
-DDR_ON=60000    # Belkin default is 65
-WIFI_ON=95000   # Belkin default is 105
+# Set fan to 100% on >= these temperatures
+#CPU_HI=75000    # Belkin default is 85
+#DDR_HI=60000    # Belkin default is 65
+#WIFI_HI=95000   # Belkin default is 105
 
-# The fan will run at reduced speed if any of these temperatures are below these values
-CPU_MID=69500     # Belkin sets no default
+# Set fan to 75% <= these, otherwise 100% 
+CPU_MID=70000     # Belkin sets no default
 DDR_MID=55000     # Belkin sets no default
 WIFI_MID=75000    # Belkin sets no default
 
-# The fan will turn off if all of the temperatures are below these values
-CPU_OFF=63500     # Belkin default is 80
-DDR_OFF=50000     # Belkin default is 60
-WIFI_OFF=55000    # Belkin default is 100
+# Set fan to 50% <= these temperatures
+CPU_LOW=65000     # Belkin default is 80
+DDR_LOW=50000     # Belkin default is 60
+WIFI_LOW=55000    # Belkin default is 100
 
-old_pwm=-2
+cur_pwm=0
+new_pwm="$FANHI"  # start fan at HI while coming up
 
 fan_set() {
-    if [ "$1" -eq 2 ]; then
-        pwm=255
-	ppwm="100%"
-    elif [ "$1" -eq 1 ]; then
-        pwm=191
-	ppwm="75%"
-    elif [ "$1" -eq 0 ]; then
-        pwm=127
-	ppwm="50%"
+    local ppwm
+    cur_pwm=$1
+
+    if [ "$1" -eq $FANLOW ]; then
+        ppwm="50%"
+    elif [ "$1" -eq $FANMID ]; then
+        ppwm="75%"
+    else
+        ppwm="100%"
     fi
-    if [ "$pwm" -ne "$old_pwm" ]; then
-	logger -t FAN_MONITOR "Setting Fan to $ppwm"
-        echo "$pwm" > /sys/devices/platform/pwm_fan/hwmon/hwmon0/pwm1
-        old_pwm=$pwm
-    fi
+
+    logger -t FAN_MONITOR "Setting Fan to $ppwm"
+    echo "$1" > /sys/devices/platform/pwm_fan/hwmon/hwmon0/pwm1
 }
 
-# Turn fan to reduced speed when exiting
-trap "{ logger -t FAN_MONITOR Fan monitor exiting; fan_set 2; logger -t FAN_MONITOR as a precaution; exit; }" SIGINT SIGTERM
+# Crank fan on exit
+trap "{ logger -t FAN_MONITOR Fan monitor exiting; fan_set $FANHI; logger -t FAN_MONITOR as a precaution; exit; }" SIGINT SIGTERM
 
 # Main fan control loop
 while :
 do
+    if [ "$new_pwm" -ne "$cur_pwm" ]
+    then
+        fan_set "$new_pwm"
+    fi
+    sleep $INTERVAL
+
     cpu=`cat /sys/class/hwmon/hwmon2/temp1_input`
     ddr=`cat /sys/class/hwmon/hwmon1/temp1_input`
     wifi=`cat /sys/class/hwmon/hwmon1/temp2_input`
 
-    if [ "$cpu" -ge $CPU_ON -o "$ddr" -ge $DDR_ON -o "$wifi" -ge $WIFI_ON ]
+    if [ "$cpu" -le $CPU_LOW -a "$ddr" -le $DDR_LOW -a "$wifi" -le $WIFI_LOW ]
     then
-        fan_set 2
-    elif [ "$cpu" -le $CPU_OFF -a "$ddr" -le $DDR_OFF -a "$wifi" -le $WIFI_OFF ]
-    then
-        fan_set 0
+        new_pwm="$FANLOW"
     elif [ "$cpu" -le $CPU_MID -a "$ddr" -le $DDR_MID -a "$wifi" -le $WIFI_MID ]
     then
-        fan_set 1
+        new_pwm="$FANMID"
+    else
+        new_pwm="$FANHI"
     fi
-
-    sleep $INTERVAL
 done
 
