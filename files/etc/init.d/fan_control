@@ -9,7 +9,7 @@ USE_PROCD=1
 boot() {
 . /lib/mvebu.sh
 
-if [[ $(mvebu_board_name) = armada-xp-linksys-mamba ]]; then
+if [[ $(board_name) = armada-xp-linksys-mamba ]]; then
     rc_procd start_service
 fi
 }

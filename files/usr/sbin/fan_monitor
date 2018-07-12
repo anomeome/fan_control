@@ -11,17 +11,17 @@ FANMID=191   # mid fan speed
 FANHI=255    # high fan speed
 
 # Set fan to 100% on >= these temperatures
-#CPU_HI=75000    # Belkin default is 85
+#CPU_HI=80000    # Belkin default is 85
 #DDR_HI=60000    # Belkin default is 65
 #WIFI_HI=95000   # Belkin default is 105
 
 # Set fan to 75% <= these, otherwise 100% 
-CPU_MID=70000     # Belkin sets no default
+CPU_MID=80000     # Belkin sets no default
 DDR_MID=55000     # Belkin sets no default
 WIFI_MID=75000    # Belkin sets no default
 
 # Set fan to 50% <= these temperatures
-CPU_LOW=65000     # Belkin default is 80
+CPU_LOW=72000     # Belkin default is 80
 DDR_LOW=50000     # Belkin default is 60
 WIFI_LOW=55000    # Belkin default is 100
 
